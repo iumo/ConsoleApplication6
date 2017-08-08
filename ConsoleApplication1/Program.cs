@@ -111,7 +111,7 @@ namespace ConsoleApplication1
                 //    stack.Push(templist);
                 //},
                 //["abs"] = () => { dynamic temp = stack.Pop(); stack.Push(Math.Abs(temp)); },
-                ["add"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(temp + stack.Pop()); }),
+                ["add"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(temp + stack.Pop()); } ),
                 //["aload"] = () => { dynamic temp = stack.Pop(); foreach (var el in temp) stack.Push(el); stack.Push(temp); },
                 //["and"] = () => { dynamic temp = stack.Pop(); stack.Push(temp is bool ? temp && stack.Pop() : temp & stack.Pop()); },
                 //["arc"] = () => { throw new NotImplementedException(); },
