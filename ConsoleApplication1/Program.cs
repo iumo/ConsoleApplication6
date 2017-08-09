@@ -76,7 +76,7 @@ namespace ConsoleApplication1
 
             Dictionary<string, dynamic> genericresource = new Dictionary<string, dynamic>();
             genericresource["DefineResource"] = new Action<string, dynamic>((str, obj) => { genericresource[str] = obj; });
-            genericresource["UnDefineResource"] = new Action<string, dynamic>((str, obj) => { });
+            genericresource["UnDefineResource"] = new Action<string>((str) => { genericresource.Remove(str); });
             genericresource["FindResource"] = new Func<string, object>((str) => { return genericresource[str]; });
             genericresource["ResourceStatus"] = new Func<string, object>((str) => { return null; });
             genericresource["ResourceStatus"] = new Func<string, object>((str) => { return null; });
