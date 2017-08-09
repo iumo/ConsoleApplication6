@@ -68,7 +68,7 @@ namespace ConsoleApplication1
                 ["currentlinewidth"] = 1,
             };
 
-            Dictionary<string, object> systemparams = new Dictionary<string, object>
+            Dictionary<string, object> myparams = new Dictionary<string, object>
             {
                 ["currentglobal"] = false,
                 ["currentpacking"] = false,
@@ -163,7 +163,7 @@ namespace ConsoleApplication1
                 //["counttomark"] = () => { dynamic temp = stack.TakeWhile(el => el != mark).Count(); stack.Push(temp); },
                 //["currentdict"] = () => { stack.Push(dictstack.Peek()); },
                 //["currentfont"] = () => { stack.Push(graphicstate["currentfont"]); },
-                ["currentglobal"] = (Action)(() => { stack.Push(systemparams["currentglobal"]); }),
+                ["currentglobal"] = (Action)(() => { stack.Push(myparams["currentglobal"]); }),
                 //["currentpacking"] = () => { stack.Push(systemparams["currentpacking"]); },
                 //["currentpoint"] = () => { dynamic temp = graphicstate["currentpoint"]; if (temp == null) throw new Exception(); stack.Push(temp); },
                 //["cvi"] = () => { dynamic temp = stack.Pop(); stack.Push(temp is StringBuilderSegment ? int.Parse(temp.ToString()) : (int)temp); },
