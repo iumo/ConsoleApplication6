@@ -79,11 +79,11 @@ namespace ConsoleApplication1
             genericresource["UnDefineResource"] = new Action<string>((str) => { genericresource.Remove(str); });
             genericresource["FindResource"] = new Func<string, object>((str) => { return genericresource[str]; });
             genericresource["ResourceStatus"] = new Func<string, object>((str) => { return null; });
-            genericresource["ResourceStatus"] = new Func<string, object>((str) => { return null; });
-
             genericresource["Category"] = "Generic";
+
             Dictionary<string, Dictionary<string, dynamic>> resources = new Dictionary<string, Dictionary<string, dynamic>>();
             resources["/Generic"] = genericresource;
+            
             Dictionary<string, dynamic> categoryresource = new Dictionary<string, dynamic>();
             categoryresource["DefineResource"] = new Action<string, Dictionary<string, object>>((str, obj) => {
                 obj["DefineResource"] = new Action<string, dynamic>((str2, obj2) => { obj[str2] = obj2; });
