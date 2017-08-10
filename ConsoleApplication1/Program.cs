@@ -19,7 +19,9 @@ namespace ConsoleApplication1
 
         static void Main(string[] args)
         {
-            initialize(new FileInfo(@"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps"));
+            string filepath = @"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps";
+            //string filepath = @"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps";
+            initialize(new FileInfo(filepath));
             interpreter();
         }
 
@@ -48,7 +50,9 @@ namespace ConsoleApplication1
                         {
                             Dictionary<string, dynamic> dict = dictstack.FirstOrDefault(d => d.ContainsKey(next));
                             if (dict == null) throw new Exception(next);
-                            dict[next]();
+                            dynamic execobject = dict[next];
+                            if (execobject is Action) execobject();
+                            else stack.Push(execobject);
                         }
                     }
                     else if (type == typeof(object[])) stack.Push(next);
@@ -74,25 +78,10 @@ namespace ConsoleApplication1
                 ["currentpacking"] = false,
             };
 
-            Dictionary<string, dynamic> genericresource = new Dictionary<string, dynamic>();
-            genericresource["DefineResource"] = new Action<string, dynamic>((str, obj) => { genericresource[str] = obj; });
-            genericresource["UnDefineResource"] = new Action<string>((str) => { genericresource.Remove(str); });
-            genericresource["FindResource"] = new Func<string, object>((str) => { return genericresource[str]; });
-            genericresource["ResourceStatus"] = new Func<string, object>((str) => { return null; });
-            genericresource["Category"] = "Generic";
-
-            Dictionary<string, Dictionary<string, dynamic>> resources = new Dictionary<string, Dictionary<string, dynamic>>();
-            resources["/Generic"] = genericresource;
-            
-            Dictionary<string, dynamic> categoryresource = new Dictionary<string, dynamic>();
-            categoryresource["DefineResource"] = new Action<string, Dictionary<string, object>>((str, obj) => {
-                obj["DefineResource"] = new Action<string, dynamic>((str2, obj2) => { obj[str2] = obj2; });
-                obj["FindResource"] = new Func<string, object>((str2) => { return obj[str2]; });
-                resources[str] = obj;
-            });
-            categoryresource["FindResource"] = new Func<string, object>((str) => { return resources[str]; });
-            categoryresource["Category"] = "Category";
-            resources["/Category"] = categoryresource;
+            Dictionary<string, dynamic> genericresource = ResourceFactory();
+            Dictionary<string, dynamic> categoryresource = ResourceFactory("Category", "dicttype");
+            categoryresource["DefineResource"]("Generic", genericresource);
+            categoryresource["DefineResource"]("Category", categoryresource);
 
             systemdict = new Dictionary<string, dynamic>
             {
@@ -119,23 +108,24 @@ namespace ConsoleApplication1
                 //["array"] = () => { dynamic temp = stack.Pop(); stack.Push(new dynamic[temp]); },
                 //["ashow"] = () => { throw new NotImplementedException(); },
                 //["astore"] = () => { dynamic temp = stack.Pop(); int length = temp.Length; for (var i = length; i > 0; i--) temp[i - 1] = stack.Pop(); stack.Push(temp); },
-                //["begin"] = () => { dictstack.Push(stack.Pop()); },
-                //["bind"] = () => {
-                //    return;
-                //    dynamic proc = stack.Pop();
-                //    for (var i = 0; i < proc.Count; i++)
-                //    {
-                //        if (proc[i] is string && !proc[i].StartsWith("/"))
-                //        {
-                //            if (systemdict.ContainsKey(proc[i]))
-                //            {
-                //                proc[i] = systemdict[proc[i]];
-                //            }
+                ["begin"] = (Action)(() => { dictstack.Push(stack.Pop()); }),
+                ["bind"] = (Action)(() =>
+                {
+                    return;
+                    dynamic proc = stack.Pop();
+                    for (var i = 0; i < proc.Count; i++)
+                    {
+                        if (proc[i] is string && !proc[i].StartsWith("/"))
+                        {
+                            if (systemdict.ContainsKey(proc[i]))
+                            {
+                                proc[i] = systemdict[proc[i]];
+                            }
 
-                //        }
-                //    }
-                //    stack.Push(proc);
-                //},
+                        }
+                    }
+                    stack.Push(proc);
+                }),
                 //["bitshift"] = () => { dynamic temp = stack.Pop(); stack.Push(temp >= 0 ? stack.Pop() << temp : stack.Pop() >> temp); },
                 //["ceiling"] = () => { stack.Push(Math.Ceiling((float)stack.Pop())); },
                 //["charpath"] = () => { throw new NotImplementedException(); },
@@ -152,49 +142,79 @@ namespace ConsoleApplication1
                     {
                         Dictionary<string, object> dest = temp as Dictionary<string, object>;
                         Dictionary<string, object> sourcedict = stack.Pop() as Dictionary<string, object>;
-                        foreach (var item in sourcedict)
+                        if (sourcedict.ContainsKey("Category") && sourcedict["Category"] == "Generic")
                         {
-                            dest[item.Key] = item.Value;
+                            dest = ResourceFactory();
+                        }
+                        else
+                        { 
+                            foreach (var item in sourcedict)
+                            {
+                                dest[item.Key] = item.Value;
+                            }
                         }
                         stack.Push(dest);
                     }
                     else throw new NotImplementedException();
                 }),
                 //["counttomark"] = () => { dynamic temp = stack.TakeWhile(el => el != mark).Count(); stack.Push(temp); },
-                //["currentdict"] = () => { stack.Push(dictstack.Peek()); },
+                ["currentdict"] = (Action)(() => { stack.Push(dictstack.Peek()); }),
                 //["currentfont"] = () => { stack.Push(graphicstate["currentfont"]); },
                 ["currentglobal"] = (Action)(() => { stack.Push(myparams["currentglobal"]); }),
                 //["currentpacking"] = () => { stack.Push(systemparams["currentpacking"]); },
                 //["currentpoint"] = () => { dynamic temp = graphicstate["currentpoint"]; if (temp == null) throw new Exception(); stack.Push(temp); },
                 //["cvi"] = () => { dynamic temp = stack.Pop(); stack.Push(temp is StringBuilderSegment ? int.Parse(temp.ToString()) : (int)temp); },
-                //["cvlit"] = () => { /*System.Diagnostics.Debugger.Break(); */},
-                //["cvr"] = () => { dynamic temp = stack.Pop(); stack.Push(temp is StringBuilderSegment ? float.Parse(temp.ToString()) : (float)temp); },
+                ["cvlit"] = (Action)(() => {
+                    dynamic temp = stack.Peek();
+                    if (temp.StartsWith("(") || temp.StartsWith("/")) return;
+                    else System.Diagnostics.Debugger.Break(); }),
+                ["cvr"] = (Action)(() => {
+                    dynamic temp = stack.Pop();
+                    if (temp is int) stack.Push((float)temp);
+                    else throw new Exception();
+                    //stack.Push(temp is StringBuilderSegment ? float.Parse(temp.ToString()) : (float)temp);
+                }),
                 //["cvrs"] = () => { dynamic temp = stack.Pop(); dynamic radix = stack.Pop(); stack.Push(Convert.ToInt32(stack.Pop(), radix)); },
-                //["cvs"] = () => { dynamic temp = stack.Pop(); stack.Push(stack.Pop().ToString()); },
+                ["cvs"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push("(" + stack.Pop().ToString() + ")"); }),
                 //["cvx"] = () => { throw new NotImplementedException(); },
-                //["def"] = () => { dynamic temp = stack.Pop(); (dictstack.Peek())[stack.Pop()] = temp; },
-                //["defineresource"] = () => {
-                //    dynamic category = stack.Pop(); dynamic instance = stack.Pop(); dynamic key = stack.Pop();
-                //    resources[category]["DefineResource"](key, instance);
-                //    stack.Push(instance);
-                //},
+                ["def"] = (Action)(() => {
+
+                    dynamic value = stack.Pop();
+                    dynamic key = stack.Pop();
+                    if (key.StartsWith("/")) key = key.Substring(1);
+                    else if (key.StartsWith("(")) key = key.Substring(1, key.Length - 2);
+                    dictstack.Peek()[key] = value;
+                }),
+                ["defineresource"] = (Action)(() =>
+                {
+                    dynamic category = stack.Pop().Substring(1); dynamic instance = stack.Pop(); dynamic key = stack.Pop().Substring(1);
+                    if (category == "Category") instance["Category"] = key;
+                    categoryresource[category]["DefineResource"](key, instance);
+                    stack.Push(instance);
+                }),
                 ["dict"] = (Action)(() => { stack.Pop(); stack.Push(new Dictionary<string, dynamic>()); }),
                 //["div"] = () => { dynamic temp = stack.Pop(); stack.Push(stack.Pop() / temp); },
                 //["dtransform"] = () => { throw new NotImplementedException(); },
                 ["dup"] = (Action)(() => { stack.Push(stack.Peek()); }),
-                //["end"] = () => { dictstack.Pop(); },
-                //["eq"] = () => { stack.Push(stack.Pop() == stack.Pop()); },
-                //["exch"] = () => { dynamic first = stack.Pop(); dynamic second = stack.Pop(); stack.Push(first); stack.Push(second); },
-                //["exec"] = () => { dynamic proc = stack.Pop(); interpreter(proc); },
-                //["exit"] = () => { exit = true; },
+                ["end"] = (Action)(() => { dictstack.Pop(); }),
+                ["eq"] = (Action)(() => { stack.Push(stack.Pop() == stack.Pop()); }),
+                ["exch"] = (Action)(() => { dynamic first = stack.Pop(); dynamic second = stack.Pop(); stack.Push(first); stack.Push(second); }),
+                ["exec"] = (Action)(() => {
+                    execstack.Push(new PSObject(stack.Pop())); }),
+                ["exit"] = (Action)(() => {
+                    while (!execstack.Peek().Loop) execstack.Pop();
+                    execstack.Pop();
+                }),
                 //["exp"] = () => { dynamic temp = stack.Pop(); stack.Push(Math.Pow((dynamic)stack.Pop(), temp)); },
-                //["false"] = () => { stack.Push(false); },
+                ["false"] = (Action)(() => { stack.Push(false); }),
                 //["fill"] = () => { throw new NotImplementedException(); },
-                //["findfont"] = () => { stack.Pop(); stack.Push(new Dictionary<string, dynamic>()); },
+                ["findfont"] = (Action)(() => { stack.Pop(); stack.Push(new Dictionary<string, dynamic>()); }),
                 ["findresource"] = (Action)(() =>
                 {
                     dynamic category = stack.Pop(); dynamic key = stack.Pop();
-                    dynamic instance = resources[category]["FindResource"](key);
+                    if (category.StartsWith("/")) category = category.Substring(1);
+                    if (key.StartsWith("/")) key = key.Substring(1);
+                    dynamic instance = categoryresource[category]["FindResource"](key);
                     stack.Push(instance);
                 }),
                 //["for"] = () => {
@@ -208,16 +228,21 @@ namespace ConsoleApplication1
                 //        interpreter(proc);
                 //    }
                 //},
-                //["forall"] = () => {
-                //    dynamic temp = stack.Pop();
-                //    dynamic target = stack.Pop();
-                //    foreach (dynamic item in target)
-                //    {
-                //        stack.Push(item.Key);
-                //        stack.Push(item.Value);
-                //        interpreter(temp);
-                //    }
-                //},
+                ["forall"] = (Action)(() =>
+                {
+                    dynamic proc = stack.Pop();
+                    dynamic target = stack.Pop();
+                    if (target is Dictionary<string, dynamic>)
+                    {
+                        foreach (dynamic item in target)
+                        {
+                            stack.Push(item.Key);
+                            stack.Push(item.Value);
+                            execstack.Push(new PSObject(proc));
+                        }
+                    }
+                    else throw new Exception();
+                }),
                 //["ge"] = () => { stack.Push(stack.Pop() <= stack.Pop()); },
                 //["get"] = () => {
                 //    dynamic temp = stack.Pop();
@@ -235,10 +260,11 @@ namespace ConsoleApplication1
                 //["gsave"] = () => { throw new NotImplementedException(); },
                 //["gt"] = () => { stack.Push(stack.Pop() < stack.Pop()); },
                 //["idiv"] = () => { dynamic temp = stack.Pop(); stack.Push((int)(stack.Pop() / temp)); },
-                //["if"] = () => {
-                //    dynamic proc = stack.Pop();
-                //    if (stack.Pop()) interpreter(proc);
-                //},
+                ["if"] = (Action)(() =>
+                {
+                    dynamic proc = stack.Pop();
+                    if (stack.Pop()) execstack.Push(new PSObject(proc));
+                }),
                 ["ifelse"] = (Action)(() => { dynamic else_proc = stack.Pop(); dynamic if_proc = stack.Pop(); execstack.Push(stack.Pop() ? new PSObject(if_proc) : new PSObject(else_proc)); }),
                 //["index"] = () => { dynamic temp = stack.Pop(); stack.Push(stack.Skip(stack.Count - ((int)temp + 1)).Take(1)); },
                 //["known"] = () => { dynamic temp = stack.Pop(); dynamic source = stack.Pop(); stack.Push(source.ContainsKey(temp.ToString())); },
@@ -252,29 +278,23 @@ namespace ConsoleApplication1
                 }),
                 //["lineto"] = () => { throw new NotImplementedException(); },
                 //["ln"] = () => { stack.Push(Math.Log((dynamic)stack.Pop())); },
-                //["load"] = () => {
-                //    dynamic key = stack.Pop();
-                //    dynamic dicts = dictstack.ToArray();
-                //    foreach (var item in dicts)
-                //    {
-                //        if (item.ContainsKey(key))
-                //        {
-                //            stack.Push(item[key]);
-                //            break;
-                //        }
-
-                //    }
-                //    //throw new NotImplementedException(); 
-                //},
-                //["loop"] = () => {
-                //    dynamic proc = stack.Pop();
-                //    while (!exit) interpreter(proc);
-                //    exit = false;
-                //},
+                ["load"] = (Action)(() =>
+                {
+                    dynamic key = stack.Pop();
+                    Dictionary<string, dynamic> dict = dictstack.FirstOrDefault(d => d.ContainsKey(key.Substring(1)));
+                    if (dict == null) throw new Exception();
+                    stack.Push(dict[key.Substring(1)]);
+                }),
+                ["loop"] = (Action)(() => {
+                    dynamic proc = stack.Pop();
+                    //while (!exit)
+                    var temp = new PSObject(proc); temp.Loop = true;
+                    execstack.Push(temp);
+                }),
                 //["lt"] = () => { stack.Push((int)stack.Pop() > (int)stack.Pop()); },
                 //["mark"] = () => { stack.Push(mark); },
                 //["mod"] = () => { dynamic temp = stack.Pop(); stack.Push(stack.Pop() % temp); },
-                //["moveto"] = () => { stack.Pop(); stack.Pop(); System.Diagnostics.Debug.Print("moveto"); },
+                ["moveto"] = (Action)(() => { stack.Pop(); stack.Pop();}),
                 //["mul"] = () => { stack.Push((dynamic)stack.Pop() * (dynamic)stack.Pop()); },
                 //["ne"] = () => { stack.Push((dynamic)stack.Pop() != (dynamic)stack.Pop()); },
                 //["neg"] = () => { stack.Push(-(dynamic)stack.Pop()); },
@@ -283,8 +303,17 @@ namespace ConsoleApplication1
                 //["null"] = () => { stack.Push(null); },
                 //["or"] = () => { dynamic temp = stack.Pop(); stack.Push(temp is bool ? (bool)stack.Pop() || temp : stack.Pop() | temp); },
                 //["pathbbox"] = () => { throw new NotImplementedException(); },
-                //["pop"] = () => { stack.Pop(); },
-                //["put"] = () => { dynamic value = stack.Pop(); dynamic index = stack.Pop(); ((dynamic)stack.Pop())[index is StringBuilderSegment ? index.ToString() : index] = value; },
+                ["pop"] = (Action)(() => { stack.Pop(); }),
+                ["put"] = (Action)(() => {
+                    dynamic value = stack.Pop();
+                    if (value is string && value.StartsWith("/")) value = value.Substring(1);
+                    dynamic index = stack.Pop();
+                    if (index is string && index.StartsWith("/")) index= index.Substring(1);
+                    dynamic target = stack.Pop();
+                    var d = target as Dictionary<string, dynamic>;
+                    if (d == null) throw new Exception();
+                    d[index] = value;
+                }),
                 //["putinterval"] = () => { dynamic value = stack.Pop(); dynamic index = stack.Pop(); throw new Exception(); },
                 //["repeat"] = () => { throw new NotImplementedException(); },
                 //["rlineto"] = () => { throw new NotImplementedException(); },
@@ -298,55 +327,67 @@ namespace ConsoleApplication1
                 //},
                 //["round"] = () => { stack.Push(Math.Round((dynamic)stack.Pop())); },
                 //["scale"] = () => { throw new NotImplementedException(); },
-                //["scalefont"] = () => { stack.Pop(); },
-                //["search"] = () => {
-                //    string temp = stack.Pop().ToString();
-                //    string source = stack.Pop().ToString();
-                //    int index = source.IndexOf(temp);
-                //    if (index == -1) { stack.Push(source); stack.Push(false); }
-                //    else
-                //    {
-                //        stack.Push(source.Substring(index + temp.Length));
-                //        stack.Push(temp);
-                //        stack.Push(source.Substring(0, index));
-                //    }
-                //},
+                ["scalefont"] = (Action)(() => { stack.Pop(); }),
+                ["search"] = (Action)(() =>
+                {
+                    string temp = stack.Pop();
+                    string string_source = stack.Pop();
+                    temp = temp.Substring(1, temp.Length - 2);
+                    string_source = string_source.Substring(1, string_source.Length - 2);
+                    int index = string_source.IndexOf(temp);
+                    if (index == -1) { stack.Push("(" + string_source + ")"); stack.Push(false); }
+                    else
+                    {
+                        stack.Push("(" + string_source.Substring(index + temp.Length) + ")");
+                        stack.Push("(" + temp + ")");
+                        stack.Push("(" + string_source.Substring(0, index) + ")");
+                    }
+                }),
                 //["selectfont"] = () => { graphicstate["currentfont"] = stack.Pop(); },
                 //["setcmykcolor"] = () => { graphicstate["currentcolor"] = stack.Take(4).Reverse().ToArray(); for (var i = 0; i < 4; i++) stack.Pop(); },
                 ["setglobal"] = (Action)(() => { graphicstate["currentglobal"] = stack.Pop(); }),
                 //["setlinecap"] = () => { graphicstate["currentlinecap"] = stack.Pop(); },
                 //["setlinewidth"] = () => { graphicstate["currentlinewidth"] = stack.Pop(); },
                 //["setrgbcolor"] = () => { graphicstate["currentcolor"] = stack.Take(3).Reverse().ToArray(); for (var i = 0; i < 3; i++) stack.Pop(); },
-                //["setfont"] = () => { graphicstate["currentfont"] = stack.Pop(); },
+                ["setfont"] = (Action)(() => { graphicstate["currentfont"] = stack.Pop(); }),
                 //["show"] = () => { throw new NotImplementedException(); },
                 //["sqrt"] = () => { stack.Push(Math.Sqrt((dynamic)stack.Pop())); },
                 //["stop"] = () => { throw new NotImplementedException(); },
-                //["string"] = () => { stack.Push(new string('\0', (dynamic)stack.Pop())); },
+                ["string"] = (Action)(() => { stack.Push(new string('\0', stack.Pop())); }),
                 //["stringwidth"] = () => { throw new NotImplementedException(); },
                 //["stroke"] = () => { throw new NotImplementedException(); },
                 //["sub"] = () => { dynamic temp = stack.Pop(); stack.Push(stack.Pop() - temp); },
-                //["token"] = () => {
-                //    dynamic source = stack.Pop();
-                //    dynamic res = PSSource.GetTokenFromString(source is string ? source.ToString() : source.SB.ToString());
-                //    if (res.Length == 2)
-                //    {
-                //        stack.Push(res[1]);
-                //        stack.Push(res[0]);
-                //        stack.Push(true);
-                //    }
-                //    else stack.Push(false);
-                //},
+                ["token"] = (Action)(() =>
+                {
+                    dynamic token_source = stack.Pop();
+                    dynamic token_objects;
+                    if (token_source is PSObject) token_objects = token_source;
+                    else token_objects= new PSObject(token_source.Substring(1, token_source.Length - 2));
+                    dynamic res = token_objects.Next();
+                    if (res == null) stack.Push(false);
+                    else{
+                        stack.Push(token_objects);
+                        stack.Push(res);
+                        stack.Push(true);
+                    }
+                }),
                 //["translate"] = () => { throw new NotImplementedException(); },
                 ["true"] = (Action)(() => { stack.Push(true); }),
-                //["type"] = () => {
-                //    dynamic temp = stack.Pop();
-                //    if (temp is StringBuilderSegment) stack.Push("/stringtype");
-                //    else
-                //    {
-                //        System.Diagnostics.Debugger.Break();
+                ["type"] = (Action)(() =>
+                {
+                    dynamic temp = stack.Pop();
+                    if (temp is string)
+                    {
+                        if (temp.StartsWith("(")) stack.Push("/stringtype");
+                        else if (temp.StartsWith("/")) stack.Push("/nametype");
+                        else System.Diagnostics.Debugger.Break();
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debugger.Break();
 
-                //    }
-                //},
+                    }
+                }),
                 ["where"] = (Action)(() =>
                 {
                     string temp = (string)stack.Pop();
@@ -368,6 +409,20 @@ namespace ConsoleApplication1
             execstack.Push(psobject);
             interpreter();
         }
+        
+        private static Dictionary<string, dynamic> ResourceFactory(string category = "Generic", string instancetype = null )
+        {
+            Dictionary<string, dynamic> resource = new Dictionary<string, dynamic>();
+            resource["DefineResource"] = new Action<string, dynamic>((key, obj) => {
+                resource[key] = obj;
+            });
+            resource["UnDefineResource"] = new Action<string>((key) => { resource.Remove(key); });
+            resource["FindResource"] = new Func<string, dynamic>((key) => { return resource[key]; });
+            resource["ResourceStatus"] = new Func<string, dynamic>((key) => { return null; });
+            resource["Category"] = category;
+            if (instancetype != null) resource["InstanceType"] = instancetype;
+            return resource;
+        }
     }
 
     internal class PSObject
@@ -376,6 +431,7 @@ namespace ConsoleApplication1
         private int _current = 0;
         private bool _evaluated = false;
         private object[] _objects;
+        private bool _loop = false;
 
         public PSObject()
         {
@@ -385,6 +441,11 @@ namespace ConsoleApplication1
         {
             var fileBytes = System.IO.File.ReadAllBytes(file.FullName);
             var psString = Encoding.ASCII.GetString(fileBytes);
+            _get_from_string(psString);
+        }
+
+        private void _get_from_string(string source)
+        {
             var regex = new System.Text.RegularExpressions.Regex(
                 @"^
                 (
@@ -408,7 +469,7 @@ namespace ConsoleApplication1
                 )+
                 $",
                 System.Text.RegularExpressions.RegexOptions.IgnorePatternWhitespace);
-            var matches = regex.Matches(psString);
+            var matches = regex.Matches(source);
             var captures = matches[0].Groups[1].Captures;
             var tokens = captures.OfType<System.Text.RegularExpressions.Capture>()
                 .Select(capture => capture.Value)
@@ -420,7 +481,7 @@ namespace ConsoleApplication1
 
         public PSObject(string source)
         {
-
+            _get_from_string(source);
         }
 
         public PSObject(object[] objects)
@@ -430,6 +491,8 @@ namespace ConsoleApplication1
         }
 
         public int Position { get { return _current; } }
+
+        public bool Loop { get { return _loop; } internal set { _loop = value; } }
 
         public object Next()
         {
@@ -457,7 +520,8 @@ namespace ConsoleApplication1
             }
             else
             {
-                if (_current == _objects.Length) return null;
+                if (_loop) _current = _current % _objects.Length;
+                else if (_current == _objects.Length) return null;
                 return _objects[_current++];
             }
         }

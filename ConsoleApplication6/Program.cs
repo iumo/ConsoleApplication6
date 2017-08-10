@@ -20,7 +20,8 @@ namespace ConsoleApplication6
 
         static void Main(string[] args)
         {
-            var tokens = PSSource.CreateFromFile(@"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps"); //(@"W:\bc\barcode.ps");
+            //var tokens = PSSource.CreateFromFile(@"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps");
+            var tokens = PSSource.CreateFromFile(@"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps");
             Dictionary<string, dynamic> genericresource = new Dictionary<string, dynamic>();
             genericresource["DefineResource"] = new Action<string, dynamic>((str, obj) =>  { genericresource[str] = obj; });
             genericresource["UnDefineResource"] = new Action<string, dynamic>((str, obj) => { });
