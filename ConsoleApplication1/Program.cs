@@ -12,7 +12,7 @@ namespace ConsoleApplication1
     class Program
     {
         private static Stack<PSObject> execstack = new Stack<PSObject>();
-        private static Stack<Dictionary<string, dynamic>> dictstack = new Stack<Dictionary<string, dynamic>>();
+        public static Stack<Dictionary<string, dynamic>> dictstack = new Stack<Dictionary<string, dynamic>>();
         private static Dictionary<string, dynamic> systemdict;
         private static object mark = new object();
 
@@ -546,6 +546,7 @@ namespace ConsoleApplication1
                             innerstack.Pop();
                         }
                     } while (innerstack.Count != 0);
+                    ((IEnumerable)current).Cast<dynamic>().Select(o => !o.StartsWith("//") ? o : Program.dictstack.First(d => d.ContainsKey((string(o))) )
                 }
                 return current;
             }
