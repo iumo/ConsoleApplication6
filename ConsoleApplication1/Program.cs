@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -19,8 +20,8 @@ namespace ConsoleApplication1
 
         static void Main(string[] args)
         {
-            //string filepath = @"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps";
-            string filepath = @"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps";
+            string filepath = @"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps";
+            //string filepath = @"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps";
             initialize(new FileInfo(filepath));
             interpreter();
         }
@@ -31,22 +32,24 @@ namespace ConsoleApplication1
             {
                 dynamic top = execstack.Pop();
                 dynamic next = top.Next();
+                if (next != null && next.ToString().Contains("raiseerror")) System.Diagnostics.Debugger.Break();
                 if (next != null) 
                 {
                     execstack.Push(top);
                     Type type = next.GetType();
                     if (type == typeof(int)) stack.Push(next);
-                    else if (type == typeof(string)) 
+                    else if (type == typeof(float)) stack.Push(next);
+                    else if (type == typeof(string))
                     {
                         if (next.StartsWith("(")) stack.Push(next);
-                        else if (next.StartsWith("//")) 
+                        else if (next.StartsWith("//"))
                         {
-                            Dictionary <string, dynamic> dict = dictstack.FirstOrDefault(d => d.ContainsKey(next));
+                            Dictionary<string, dynamic> dict = dictstack.FirstOrDefault(d => d.ContainsKey(next));
                             if (dict == null) throw new Exception();
                             stack.Push(dict[next]);
-                        } 
+                        }
                         else if (next.StartsWith("/")) stack.Push(next);
-                        else 
+                        else
                         {
                             Dictionary<string, dynamic> dict = dictstack.FirstOrDefault(d => d.ContainsKey(next));
                             if (dict == null) throw new Exception(next);
@@ -217,17 +220,18 @@ namespace ConsoleApplication1
                     dynamic instance = categoryresource[category]["FindResource"](key);
                     stack.Push(instance);
                 }),
-                //["for"] = () => {
-                //    dynamic proc = stack.Pop();
-                //    dynamic end = stack.Pop();
-                //    dynamic step = stack.Pop();
-                //    dynamic start = stack.Pop();
-                //    for (int i = start; i != end; i += step)
-                //    {
-                //        stack.Push(i);
-                //        interpreter(proc);
-                //    }
-                //},
+                ["for"] = (Action)(() =>
+                {
+                    dynamic proc = stack.Pop();
+                    dynamic end = stack.Pop();
+                    dynamic step = stack.Pop();
+                    dynamic start = stack.Pop();
+                    PSObject temp = new PSObject(proc);
+                    temp.LoopArgs = new object[] { (float)start, (float)step, (float)end};
+                    //temp.Loop = true;
+                    //temp.LoopController = new PSLoopController(start, step, end);
+                    execstack.Push(temp);
+                }),
                 ["forall"] = (Action)(() =>
                 {
                     dynamic proc = stack.Pop();
@@ -249,13 +253,14 @@ namespace ConsoleApplication1
                 //    dynamic source = stack.Pop();
                 //    stack.Push(source[temp]);
                 //},
-                //["getinterval"] = () => {
-                //    dynamic count = stack.Pop();
-                //    dynamic index = stack.Pop();
-                //    dynamic source = stack.Pop();
-                //    if (source is StringBuilderSegment) stack.Push(new StringBuilderSegment(source.SB, index, count));
-                //    else stack.Push(((IEnumerable<dynamic>)stack.Pop()).Skip((int)index).Take((int)count));
-                //},
+                ["getinterval"] = (Action)(() =>
+                {
+                    dynamic count = stack.Pop();
+                    dynamic index = stack.Pop();
+                    dynamic int_source = stack.Pop();
+                    if (int_source is string) stack.Push(int_source.Substring((int)index+1, (int)count));
+                    else throw new Exception();//stack.Push(((IEnumerable<dynamic>)stack.Pop()).Skip((int)index).Take((int)count));
+                }),
                 //["grestore"] = () => { throw new NotImplementedException(); },
                 //["gsave"] = () => { throw new NotImplementedException(); },
                 //["gt"] = () => { stack.Push(stack.Pop() < stack.Pop()); },
@@ -267,7 +272,7 @@ namespace ConsoleApplication1
                 }),
                 ["ifelse"] = (Action)(() => { dynamic else_proc = stack.Pop(); dynamic if_proc = stack.Pop(); execstack.Push(stack.Pop() ? new PSObject(if_proc) : new PSObject(else_proc)); }),
                 //["index"] = () => { dynamic temp = stack.Pop(); stack.Push(stack.Skip(stack.Count - ((int)temp + 1)).Take(1)); },
-                //["known"] = () => { dynamic temp = stack.Pop(); dynamic source = stack.Pop(); stack.Push(source.ContainsKey(temp.ToString())); },
+                ["known"] = (Action)(() => { dynamic temp = stack.Pop(); dynamic dict_source = stack.Pop(); stack.Push(dict_source.ContainsKey(temp.ToString())); }),
                 //["le"] = () => { stack.Push((int)stack.Pop() >= (int)stack.Pop()); },
                 ["length"] = (Action)(() =>
                 {
@@ -287,8 +292,7 @@ namespace ConsoleApplication1
                 }),
                 ["loop"] = (Action)(() => {
                     dynamic proc = stack.Pop();
-                    //while (!exit)
-                    var temp = new PSObject(proc); temp.Loop = true;
+                    var temp = new PSObject(proc); temp.LoopArgs = new object[] { true };
                     execstack.Push(temp);
                 }),
                 //["lt"] = () => { stack.Push((int)stack.Pop() > (int)stack.Pop()); },
@@ -299,7 +303,7 @@ namespace ConsoleApplication1
                 //["ne"] = () => { stack.Push((dynamic)stack.Pop() != (dynamic)stack.Pop()); },
                 //["neg"] = () => { stack.Push(-(dynamic)stack.Pop()); },
                 //["newpath"] = () => { System.Diagnostics.Debug.Print("newpath"); },
-                //["not"] = () => { dynamic temp = stack.Pop(); stack.Push(temp is bool ? !temp : ~temp); },
+                ["not"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(temp is bool ? !temp : ~temp); }),
                 //["null"] = () => { stack.Push(null); },
                 //["or"] = () => { dynamic temp = stack.Pop(); stack.Push(temp is bool ? (bool)stack.Pop() || temp : stack.Pop() | temp); },
                 //["pathbbox"] = () => { throw new NotImplementedException(); },
@@ -356,7 +360,7 @@ namespace ConsoleApplication1
                 ["string"] = (Action)(() => { stack.Push(new string('\0', stack.Pop())); }),
                 //["stringwidth"] = () => { throw new NotImplementedException(); },
                 //["stroke"] = () => { throw new NotImplementedException(); },
-                //["sub"] = () => { dynamic temp = stack.Pop(); stack.Push(stack.Pop() - temp); },
+                ["sub"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(stack.Pop() - temp); }),
                 ["token"] = (Action)(() =>
                 {
                     dynamic token_source = stack.Pop();
@@ -431,8 +435,11 @@ namespace ConsoleApplication1
         private int _current = 0;
         private bool _evaluated = false;
         private object[] _objects;
-        private bool _loop = false;
-        private PSLoopController _controller = null;
+        //private bool _loop = false;
+        private object[] _loop_args = null;
+        private bool args_emitted = false;
+        private bool emitting_args = false;
+        private IEnumerator iterator = null;
 
         public PSObject()
         {
@@ -493,13 +500,36 @@ namespace ConsoleApplication1
 
         public int Position { get { return _current; } }
 
-        public bool Loop { get { return _loop; } internal set { _loop = value; } }
+        public bool Loop { get { return _loop_args != null; } }
+
+        public object[] LoopArgs
+        {
+            set
+            {
+                _loop_args = value;
+                if (_loop_args.Length == 1)
+                {
+                    if (_loop_args[0] is Dictionary<string, object>)
+                    {
+                        iterator = ((Dictionary<string, object>)_loop_args[0]).GetEnumerator();
+                        iterator.MoveNext();
+                        _objects = Enumerable.Repeat(new object(), 2).Concat(_objects).ToArray();
+                    }
+                    else if (_loop_args[0] is bool) ;
+                    else throw new Exception();
+                }
+                else if (_loop_args.Length == 3)
+                    _objects = Enumerable.Repeat(new object(), 1).Concat(_objects).ToArray();
+
+            }
+        }
 
         public object Next()
         {
             if (!_evaluated)
             {
-                if (_current == _tokens.Length) return null;
+                if (_current == _tokens.Length)
+                    return null;
                 dynamic current = PSTypeConverter.Evaluate(_tokens[_current++]);
                 if (current.Equals("{"))
                 {
@@ -521,23 +551,53 @@ namespace ConsoleApplication1
             }
             else
             {
-                if (!_loop) return _current == _objects.Length ? null : _objects[_current++];
-                if (_current == _objects.Length) _current = 0;
-                if (_controller == null) return _objects[_current++];
-                dynamic arg = _controller.Next();
-                if (arg is bool) return _objects[_current++];
-                else if (arg is float) 
-                { 
-                    
+                if (_current != 0 && _current != _objects.Length)
+                    return _objects[_current++]; // inside proc
+                if (_current == _objects.Length) { // at the end of proc
+                    if (_loop_args == null)
+                        return null; // not a loop
+                    else _current = 0; // loop: wrap around
                 }
-                if (_loop) _current = _current % _objects.Length;
-                else if (_current == _objects.Length) return null;
-                return _objects[_current++];
+                // _current == 0;
+                if (_loop_args == null) return _objects[_current++];
+                if (_loop_args.Length == 1) // loop/repeat/forall
+                {
+                    if (_loop_args[0] is bool) return _objects[_current++]; // loop
+                    else if (_loop_args[0] is int) // repeat
+                    {
+                        if ((int)_loop_args[0] == 0) return null;
+                        else
+                        {
+                            _loop_args[0] = (int)_loop_args[0] - 1;
+                            return _objects[_current++];
+                        }
+                    }
+                    else if (_loop_args[0] is Dictionary<string, object>) //forall - dictionary
+                    {
+                        if (iterator.Current == null) return null;
+                        var p = (KeyValuePair<string, object>)iterator.Current;
+                        _objects[0] = p.Key;
+                        _objects[1] = p.Value;
+                        iterator.MoveNext();
+                        return _objects[_current++];
+                    }
+                    else throw new Exception();
+                }
+                else if (_loop_args.Length == 3)
+                {
+                    if ((float)_loop_args[0] > (float)_loop_args[2] && (float)_loop_args[1] > 0 ||
+                        (float)_loop_args[0] < (float)_loop_args[2] && (float)_loop_args[1] < 0)
+                        return null;
+                    _objects[0] = _loop_args[0];
+                    _loop_args[0] = (float)_loop_args[0] + (float)_loop_args[1];
+                    return _objects[_current++];
+                }
+                else throw new Exception();
             }
-        }
-        
+        }                
     }
 
+        
     internal static class PSTypeConverter
     {
         public static object Evaluate(string source)
@@ -561,60 +621,4 @@ namespace ConsoleApplication1
         }
     }
 
-    internal class PSLoopController
-    {
-        private int _counter = 0;
-        private float _start = 0;
-        private float _step = 0;
-        private float _end = 0;
-        private float _float_counter = 0;
-        private object _target = null;
-        private int _kind = 0;
-        private IEnumerator<object> _iterator = null;
-        
-        public PSLoopController(int count)
-        {
-            _counter = count;
-            _kind = 1; // repeat
-        }
-
-        public PSLoopController(float start, float step, float end)
-        {
-            _start = start;
-            _step = step;
-            _end = end;
-            _float_counter = _start;
-            _kind = 2; // for
-        }
-
-        public PSLoopController(object target)
-        {
-            _target = target;
-            _iterator = ((IEnumerable<object>)target).GetEnumerator();
-            _kind = 3; // forall
-        }
-
-        public object Next()
-        {
-            switch (_kind)
-            {
-                case 1:
-                    if (_counter-- > 0) return true;
-                    else return null;
-                case 2:
-                    float d1 = _float_counter - _start;
-                    float d2 = _float_counter - _end;
-                    if (Math.Sign(d1) == Math.Sign(d2)) return null;
-                    float current_counter = _float_counter;
-                    _float_counter += _step;
-                    return current_counter;
-                case 3:
-                    object current = _iterator.Current;
-                    _iterator.MoveNext();
-                    return current;
-                default: throw new Exception();
-            }
-        }
-
-    }
 }
