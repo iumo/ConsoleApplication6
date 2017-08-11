@@ -20,8 +20,8 @@ namespace ConsoleApplication1
 
         static void Main(string[] args)
         {
-            string filepath = @"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps";
-            //string filepath = @"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps";
+            //string filepath = @"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps";
+            string filepath = @"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps";
             initialize(new FileInfo(filepath));
             interpreter();
         }
@@ -32,7 +32,7 @@ namespace ConsoleApplication1
             {
                 dynamic top = execstack.Pop();
                 dynamic next = top.Next();
-                if (next != null && next.ToString().Contains("raiseerror")) System.Diagnostics.Debugger.Break();
+                //if (next != null && next.ToString() == "for") System.Diagnostics.Debugger.Break();
                 if (next != null) 
                 {
                     execstack.Push(top);
@@ -88,13 +88,14 @@ namespace ConsoleApplication1
 
             systemdict = new Dictionary<string, dynamic>
             {
-                //["["] = () => { stack.Push(mark); },
-                //["]"] = () => {
-                //    dynamic[] temp = stack.TakeWhile(el => el.value != mark).Reverse().ToArray();
-                //    while (stack.Peek().value != mark) stack.Pop();
-                //    stack.Pop();
-                //    stack.Push(temp);
-                //},
+                ["["] = (Action)(() => { stack.Push(mark); }),
+                ["]"] = (Action)(() =>
+                {
+                    dynamic[] temp = stack.TakeWhile(el => el != mark).Reverse().ToArray();
+                    while (stack.Peek() != mark) stack.Pop();
+                    stack.Pop();
+                    stack.Push(temp);
+                }),
                 //["<<"] = () => { stack.Push(mark); },
                 //[">>"] = () => {
                 //    Dictionary<string, dynamic> templist = new Dictionary<string, dynamic>();
@@ -103,12 +104,12 @@ namespace ConsoleApplication1
                 //    stack.Push(templist);
                 //},
                 //["abs"] = () => { dynamic temp = stack.Pop(); stack.Push(Math.Abs(temp)); },
-                ["add"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(temp + stack.Pop()); } ),
+                ["add"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(temp + stack.Pop()); }),
                 //["aload"] = () => { dynamic temp = stack.Pop(); foreach (var el in temp) stack.Push(el); stack.Push(temp); },
                 //["and"] = () => { dynamic temp = stack.Pop(); stack.Push(temp is bool ? temp && stack.Pop() : temp & stack.Pop()); },
                 //["arc"] = () => { throw new NotImplementedException(); },
                 //["arcn"] = () => { throw new NotImplementedException(); },
-                //["array"] = () => { dynamic temp = stack.Pop(); stack.Push(new dynamic[temp]); },
+                ["array"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(new dynamic[temp]); }),
                 //["ashow"] = () => { throw new NotImplementedException(); },
                 //["astore"] = () => { dynamic temp = stack.Pop(); int length = temp.Length; for (var i = length; i > 0; i--) temp[i - 1] = stack.Pop(); stack.Push(temp); },
                 ["begin"] = (Action)(() => { dictstack.Push(stack.Pop()); }),
@@ -150,7 +151,7 @@ namespace ConsoleApplication1
                             dest = ResourceFactory();
                         }
                         else
-                        { 
+                        {
                             foreach (var item in sourcedict)
                             {
                                 dest[item.Key] = item.Value;
@@ -227,7 +228,7 @@ namespace ConsoleApplication1
                     dynamic step = stack.Pop();
                     dynamic start = stack.Pop();
                     PSObject temp = new PSObject(proc);
-                    temp.LoopArgs = new object[] { (float)start, (float)step, (float)end};
+                    temp.LoopArgs = new object[] { (float)start, (float)step, (float)end };
                     //temp.Loop = true;
                     //temp.LoopController = new PSLoopController(start, step, end);
                     execstack.Push(temp);
@@ -248,17 +249,19 @@ namespace ConsoleApplication1
                     else throw new Exception();
                 }),
                 //["ge"] = () => { stack.Push(stack.Pop() <= stack.Pop()); },
-                //["get"] = () => {
-                //    dynamic temp = stack.Pop();
-                //    dynamic source = stack.Pop();
-                //    stack.Push(source[temp]);
-                //},
+                ["get"] = (Action)(() =>
+                {
+                    dynamic temp = stack.Pop();
+                    dynamic ps_source = stack.Pop();
+                    stack.Push(ps_source[temp]);
+                }),
                 ["getinterval"] = (Action)(() =>
                 {
                     dynamic count = stack.Pop();
                     dynamic index = stack.Pop();
                     dynamic int_source = stack.Pop();
-                    if (int_source is string) stack.Push(int_source.Substring((int)index+1, (int)count));
+                    if (int_source is string && int_source.StartsWith("(")) int_source = int_source.Substring(1, int_source.Length - 2);
+                    if (int_source is string) stack.Push(int_source.Substring((int)index, (int)count));
                     else throw new Exception();//stack.Push(((IEnumerable<dynamic>)stack.Pop()).Skip((int)index).Take((int)count));
                 }),
                 //["grestore"] = () => { throw new NotImplementedException(); },
@@ -279,7 +282,8 @@ namespace ConsoleApplication1
                     dynamic temp = stack.Pop();
                     Dictionary<string, object> d = temp as Dictionary<string, object>;
                     if (d != null) { stack.Push(d.Count); return; }
-                    stack.Push(temp.Length);
+                    if (temp is string && temp.StartsWith("(")) stack.Push(temp.Length - 2);
+                    else stack.Push(temp.Length);
                 }),
                 //["lineto"] = () => { throw new NotImplementedException(); },
                 //["ln"] = () => { stack.Push(Math.Log((dynamic)stack.Pop())); },
@@ -297,14 +301,14 @@ namespace ConsoleApplication1
                 }),
                 //["lt"] = () => { stack.Push((int)stack.Pop() > (int)stack.Pop()); },
                 //["mark"] = () => { stack.Push(mark); },
-                //["mod"] = () => { dynamic temp = stack.Pop(); stack.Push(stack.Pop() % temp); },
-                ["moveto"] = (Action)(() => { stack.Pop(); stack.Pop();}),
-                //["mul"] = () => { stack.Push((dynamic)stack.Pop() * (dynamic)stack.Pop()); },
+                ["mod"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(stack.Pop() % temp); }),
+                ["moveto"] = (Action)(() => { stack.Pop(); stack.Pop(); }),
+                ["mul"] = (Action)(() => { stack.Push((dynamic)stack.Pop() * (dynamic)stack.Pop()); }),
                 //["ne"] = () => { stack.Push((dynamic)stack.Pop() != (dynamic)stack.Pop()); },
                 //["neg"] = () => { stack.Push(-(dynamic)stack.Pop()); },
                 //["newpath"] = () => { System.Diagnostics.Debug.Print("newpath"); },
                 ["not"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(temp is bool ? !temp : ~temp); }),
-                //["null"] = () => { stack.Push(null); },
+                ["null"] = (Action)(() => { stack.Push(null); }),
                 //["or"] = () => { dynamic temp = stack.Pop(); stack.Push(temp is bool ? (bool)stack.Pop() || temp : stack.Pop() | temp); },
                 //["pathbbox"] = () => { throw new NotImplementedException(); },
                 ["pop"] = (Action)(() => { stack.Pop(); }),
@@ -312,7 +316,7 @@ namespace ConsoleApplication1
                     dynamic value = stack.Pop();
                     if (value is string && value.StartsWith("/")) value = value.Substring(1);
                     dynamic index = stack.Pop();
-                    if (index is string && index.StartsWith("/")) index= index.Substring(1);
+                    if (index is string && index.StartsWith("/")) index = index.Substring(1);
                     dynamic target = stack.Pop();
                     var d = target as Dictionary<string, dynamic>;
                     if (d == null) throw new Exception();
@@ -366,10 +370,10 @@ namespace ConsoleApplication1
                     dynamic token_source = stack.Pop();
                     dynamic token_objects;
                     if (token_source is PSObject) token_objects = token_source;
-                    else token_objects= new PSObject(token_source.Substring(1, token_source.Length - 2));
+                    else token_objects = new PSObject(token_source.Substring(1, token_source.Length - 2));
                     dynamic res = token_objects.Next();
                     if (res == null) stack.Push(false);
-                    else{
+                    else {
                         stack.Push(token_objects);
                         stack.Push(res);
                         stack.Push(true);
@@ -403,6 +407,7 @@ namespace ConsoleApplication1
                     else stack.Push(false);
                 }),
                 //["xor"] = () => { dynamic temp = stack.Pop(); stack.Push(temp ^ stack.Pop()); },
+                ["$error"] = new Dictionary<string, dynamic>()
             };
 
             dictstack.Push(systemdict);
@@ -427,176 +432,184 @@ namespace ConsoleApplication1
             if (instancetype != null) resource["InstanceType"] = instancetype;
             return resource;
         }
-    }
-
-    internal class PSObject
-    {
-        private string[] _tokens;
-        private int _current = 0;
-        private bool _evaluated = false;
-        private object[] _objects;
-        //private bool _loop = false;
-        private object[] _loop_args = null;
-        private bool args_emitted = false;
-        private bool emitting_args = false;
-        private IEnumerator iterator = null;
-
-        public PSObject()
+        internal class PSObject
         {
-        }
+            private string[] _tokens;
+            private int _current = 0;
+            private bool _evaluated = false;
+            private object[] _objects;
+            //private bool _loop = false;
+            private object[] _loop_args = null;
+            private bool args_emitted = false;
+            private bool emitting_args = false;
+            private IEnumerator iterator = null;
 
-        public PSObject(FileSystemInfo file)
-        {
-            var fileBytes = System.IO.File.ReadAllBytes(file.FullName);
-            var psString = Encoding.ASCII.GetString(fileBytes);
-            _get_from_string(psString);
-        }
-
-        private void _get_from_string(string source)
-        {
-            var regex = new System.Text.RegularExpressions.Regex(
-                @"^
-                (
-                [^()%\[\]{}<>/\t\r\n\f \x00]+
-                |
-                [\t\r\n\f \x00]+
-                |
-                //?[^()%\[\]{}<>/\t\r\n\f \x00]*
-                |
-                %[^\n]*\n
-                |
-                \((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3}))|\((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3})))*\))*\)
-                |
-                <<
-                |
-                >>
-                |
-                <[0-9A-Fa-f]+>
-                |
-                [\[\]{}]
-                )+
-                $",
-                System.Text.RegularExpressions.RegexOptions.IgnorePatternWhitespace);
-            var matches = regex.Matches(source);
-            var captures = matches[0].Groups[1].Captures;
-            var tokens = captures.OfType<System.Text.RegularExpressions.Capture>()
-                .Select(capture => capture.Value)
-                .Where(str => !str.StartsWith("%")) //---Remove comments
-                .Where(str => !System.Text.RegularExpressions.Regex.IsMatch(str, (@"^[\t\r\n\f \x00]+$")))
-                .ToArray(); //---Remove white spaces
-            _tokens = tokens;
-        }
-
-        public PSObject(string source)
-        {
-            _get_from_string(source);
-        }
-
-        public PSObject(object[] objects)
-        {
-            _evaluated = true;
-            _objects = objects;
-        }
-
-        public int Position { get { return _current; } }
-
-        public bool Loop { get { return _loop_args != null; } }
-
-        public object[] LoopArgs
-        {
-            set
+            public PSObject()
             {
-                _loop_args = value;
-                if (_loop_args.Length == 1)
-                {
-                    if (_loop_args[0] is Dictionary<string, object>)
-                    {
-                        iterator = ((Dictionary<string, object>)_loop_args[0]).GetEnumerator();
-                        iterator.MoveNext();
-                        _objects = Enumerable.Repeat(new object(), 2).Concat(_objects).ToArray();
-                    }
-                    else if (_loop_args[0] is bool) ;
-                    else throw new Exception();
-                }
-                else if (_loop_args.Length == 3)
-                    _objects = Enumerable.Repeat(new object(), 1).Concat(_objects).ToArray();
-
             }
-        }
 
-        public object Next()
-        {
-            if (!_evaluated)
+            public PSObject(FileSystemInfo file)
             {
-                if (_current == _tokens.Length)
-                    return null;
-                dynamic current = PSTypeConverter.Evaluate(_tokens[_current++]);
-                if (current.Equals("{"))
+                var fileBytes = System.IO.File.ReadAllBytes(file.FullName);
+                var psString = Encoding.ASCII.GetString(fileBytes);
+                _get_from_string(psString);
+            }
+
+            private void _get_from_string(string source)
+            {
+                var regex = new System.Text.RegularExpressions.Regex(
+                    @"^
+                    (
+                    [^()%\[\]{}<>/\t\r\n\f \x00]+
+                    |
+                    [\t\r\n\f \x00]+
+                    |
+                    //?[^()%\[\]{}<>/\t\r\n\f \x00]*
+                    |
+                    %[^\n]*\n
+                    |
+                    \((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3}))|\((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3})))*\))*\)
+                    |
+                    <<
+                    |
+                    >>
+                    |
+                    <[0-9A-Fa-f]+>
+                    |
+                    [\[\]{}]
+                    )+
+                    $",
+                    System.Text.RegularExpressions.RegexOptions.IgnorePatternWhitespace);
+                var matches = regex.Matches(source);
+                var captures = matches[0].Groups[1].Captures;
+                var tokens = captures.OfType<System.Text.RegularExpressions.Capture>()
+                    .Select(capture => capture.Value)
+                    .Where(str => !str.StartsWith("%")) //---Remove comments
+                    .Where(str => !System.Text.RegularExpressions.Regex.IsMatch(str, (@"^[\t\r\n\f \x00]+$")))
+                    .ToArray(); //---Remove white spaces
+                _tokens = tokens;
+            }
+
+            public PSObject(string source)
+            {
+                _get_from_string(source);
+            }
+
+            public PSObject(object[] objects)
+            {
+                _evaluated = true;
+                _objects = objects;
+            }
+
+            public int Position { get { return _current; } }
+
+            public bool Loop { get { return _loop_args != null; } }
+
+            public object[] LoopArgs
+            {
+                set
                 {
-                    Stack<object> innerstack = new Stack<object>();
-                    do
+                    _loop_args = value;
+                    if (_loop_args.Length == 1)
                     {
-                        innerstack.Push(current);
-                        current = PSTypeConverter.Evaluate(_tokens[_current++]);
-                        if (current.Equals("}"))
+                        if (_loop_args[0] is Dictionary<string, object>)
                         {
-                            Stack<object> temp = new Stack<object>();
-                            while (!innerstack.Peek().Equals("{")) temp.Push(innerstack.Pop());
-                            current = temp.ToArray();
-                            innerstack.Pop();
+                            iterator = ((Dictionary<string, object>)_loop_args[0]).GetEnumerator();
+                            iterator.MoveNext();
+                            _objects = Enumerable.Repeat(new object(), 2).Concat(_objects).ToArray();
                         }
-                    } while (innerstack.Count != 0);
-                    ((IEnumerable)current).Cast<dynamic>().Select(o => !o.StartsWith("//") ? o : Program.dictstack.First(d => d.ContainsKey((string(o))) )
+                        else if (_loop_args[0] is bool) ;
+                        else throw new Exception();
+                    }
+                    else if (_loop_args.Length == 3)
+                        _objects = Enumerable.Repeat(new object(), 1).Concat(_objects).ToArray();
+
                 }
-                return current;
             }
-            else
+
+            public object Next()
             {
-                if (_current != 0 && _current != _objects.Length)
-                    return _objects[_current++]; // inside proc
-                if (_current == _objects.Length) { // at the end of proc
-                    if (_loop_args == null)
-                        return null; // not a loop
-                    else _current = 0; // loop: wrap around
-                }
-                // _current == 0;
-                if (_loop_args == null) return _objects[_current++];
-                if (_loop_args.Length == 1) // loop/repeat/forall
+                if (!_evaluated)
                 {
-                    if (_loop_args[0] is bool) return _objects[_current++]; // loop
-                    else if (_loop_args[0] is int) // repeat
+                    if (_current == _tokens.Length)
+                        return null;
+                    dynamic current = PSTypeConverter.Evaluate(_tokens[_current++]);
+                    if (current.Equals("{"))
                     {
-                        if ((int)_loop_args[0] == 0) return null;
-                        else
+                        Stack<object> innerstack = new Stack<object>();
+                        do
                         {
-                            _loop_args[0] = (int)_loop_args[0] - 1;
+                            innerstack.Push(current);
+                            current = PSTypeConverter.Evaluate(_tokens[_current++]);
+                            if (current.Equals("}"))
+                            {
+                                Stack<object> temp = new Stack<object>();
+                                while (!innerstack.Peek().Equals("{")) temp.Push(innerstack.Pop());
+                                current = temp.ToArray();
+                                //if (Array.IndexOf(current, "//raiseerror") != -1) System.Diagnostics.Debugger.Break();
+                                current = ((dynamic[])current).Select(new Func<dynamic, dynamic>(o =>
+                                {
+                                    if (!(o is string)) return o;
+                                    if (!o.StartsWith("//")) return o;
+                                    return dictstack.First(d => d.ContainsKey(((string)o).Substring(2)))[((string)o).Substring(2)];
+                                }
+                                )).ToArray();
+                                innerstack.Pop();
+                            }
+                        } while (innerstack.Count != 0);
+                        
+                    }
+                    return current;
+                }
+                else
+                {
+                    if (_current != 0 && _current != _objects.Length)
+                        return _objects[_current++]; // inside proc
+                    if (_current == _objects.Length) { // at the end of proc
+                        if (_loop_args == null)
+                            return null; // not a loop
+                        else _current = 0; // loop: wrap around
+                    }
+                    // _current == 0;
+                    if (_loop_args == null) return _objects[_current++];
+                    if (_loop_args.Length == 1) // loop/repeat/forall
+                    {
+                        if (_loop_args[0] is bool) return _objects[_current++]; // loop
+                        else if (_loop_args[0] is int) // repeat
+                        {
+                            if ((int)_loop_args[0] == 0) return null;
+                            else
+                            {
+                                _loop_args[0] = (int)_loop_args[0] - 1;
+                                return _objects[_current++];
+                            }
+                        }
+                        else if (_loop_args[0] is Dictionary<string, object>) //forall - dictionary
+                        {
+                            if (iterator.Current == null) return null;
+                            var p = (KeyValuePair<string, object>)iterator.Current;
+                            _objects[0] = p.Key;
+                            _objects[1] = p.Value;
+                            iterator.MoveNext();
                             return _objects[_current++];
                         }
+                        else throw new Exception();
                     }
-                    else if (_loop_args[0] is Dictionary<string, object>) //forall - dictionary
+                    else if (_loop_args.Length == 3)
                     {
-                        if (iterator.Current == null) return null;
-                        var p = (KeyValuePair<string, object>)iterator.Current;
-                        _objects[0] = p.Key;
-                        _objects[1] = p.Value;
-                        iterator.MoveNext();
+                        if ((float)_loop_args[0] > (float)_loop_args[2] && (float)_loop_args[1] > 0 ||
+                            (float)_loop_args[0] < (float)_loop_args[2] && (float)_loop_args[1] < 0)
+                            return null;
+                        _objects[0] = _loop_args[0];
+                        _loop_args[0] = (float)_loop_args[0] + (float)_loop_args[1];
                         return _objects[_current++];
                     }
                     else throw new Exception();
                 }
-                else if (_loop_args.Length == 3)
-                {
-                    if ((float)_loop_args[0] > (float)_loop_args[2] && (float)_loop_args[1] > 0 ||
-                        (float)_loop_args[0] < (float)_loop_args[2] && (float)_loop_args[1] < 0)
-                        return null;
-                    _objects[0] = _loop_args[0];
-                    _loop_args[0] = (float)_loop_args[0] + (float)_loop_args[1];
-                    return _objects[_current++];
-                }
-                else throw new Exception();
-            }
-        }                
+            }                
+        }
     }
+
 
         
     internal static class PSTypeConverter
