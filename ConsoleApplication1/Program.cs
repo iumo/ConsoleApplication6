@@ -19,8 +19,8 @@ namespace ConsoleApplication1
 
         static void Main(string[] args)
         {
-            string filepath = @"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps";
-            //string filepath = @"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps";
+            //string filepath = @"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps";
+            string filepath = @"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps";
             initialize(new FileInfo(filepath));
             interpreter();
         }
@@ -432,6 +432,7 @@ namespace ConsoleApplication1
         private bool _evaluated = false;
         private object[] _objects;
         private bool _loop = false;
+        private PSLoopController _controller = null;
 
         public PSObject()
         {
@@ -520,6 +521,15 @@ namespace ConsoleApplication1
             }
             else
             {
+                if (!_loop) return _current == _objects.Length ? null : _objects[_current++];
+                if (_current == _objects.Length) _current = 0;
+                if (_controller == null) return _objects[_current++];
+                dynamic arg = _controller.Next();
+                if (arg is bool) return _objects[_current++];
+                else if (arg is float) 
+                { 
+                    
+                }
                 if (_loop) _current = _current % _objects.Length;
                 else if (_current == _objects.Length) return null;
                 return _objects[_current++];
@@ -549,5 +559,62 @@ namespace ConsoleApplication1
                 bytes[i / 2] = Convert.ToByte(hex.Substring(i, 2), 16);
             return bytes;
         }
+    }
+
+    internal class PSLoopController
+    {
+        private int _counter = 0;
+        private float _start = 0;
+        private float _step = 0;
+        private float _end = 0;
+        private float _float_counter = 0;
+        private object _target = null;
+        private int _kind = 0;
+        private IEnumerator<object> _iterator = null;
+        
+        public PSLoopController(int count)
+        {
+            _counter = count;
+            _kind = 1; // repeat
+        }
+
+        public PSLoopController(float start, float step, float end)
+        {
+            _start = start;
+            _step = step;
+            _end = end;
+            _float_counter = _start;
+            _kind = 2; // for
+        }
+
+        public PSLoopController(object target)
+        {
+            _target = target;
+            _iterator = ((IEnumerable<object>)target).GetEnumerator();
+            _kind = 3; // forall
+        }
+
+        public object Next()
+        {
+            switch (_kind)
+            {
+                case 1:
+                    if (_counter-- > 0) return true;
+                    else return null;
+                case 2:
+                    float d1 = _float_counter - _start;
+                    float d2 = _float_counter - _end;
+                    if (Math.Sign(d1) == Math.Sign(d2)) return null;
+                    float current_counter = _float_counter;
+                    _float_counter += _step;
+                    return current_counter;
+                case 3:
+                    object current = _iterator.Current;
+                    _iterator.MoveNext();
+                    return current;
+                default: throw new Exception();
+            }
+        }
+
     }
 }
