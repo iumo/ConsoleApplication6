@@ -32,7 +32,7 @@ namespace ConsoleApplication1
             {
                 dynamic top = execstack.Pop();
                 dynamic next = top.Next();
-                //if (next != null && next.ToString() == "for") System.Diagnostics.Debugger.Break();
+                //if (next != null && next.ToString() == "sbs") System.Diagnostics.Debugger.Break();
                 if (next != null) 
                 {
                     execstack.Push(top);
@@ -59,6 +59,7 @@ namespace ConsoleApplication1
                         }
                     }
                     else if (type == typeof(object[])) stack.Push(next);
+                    else if (type == typeof(bool)) stack.Push(next);
                     else System.Diagnostics.Debugger.Break();
                 }
             }
@@ -91,18 +92,19 @@ namespace ConsoleApplication1
                 ["["] = (Action)(() => { stack.Push(mark); }),
                 ["]"] = (Action)(() =>
                 {
-                    dynamic[] temp = stack.TakeWhile(el => el != mark).Reverse().ToArray();
-                    while (stack.Peek() != mark) stack.Pop();
+                    dynamic[] temp = stack.TakeWhile(el => !el.Equals(mark)).Reverse().ToArray();
+                    while (!stack.Peek().Equals(mark)) stack.Pop();
                     stack.Pop();
                     stack.Push(temp);
                 }),
-                //["<<"] = () => { stack.Push(mark); },
-                //[">>"] = () => {
-                //    Dictionary<string, dynamic> templist = new Dictionary<string, dynamic>();
-                //    while (stack.Peek() != mark) { dynamic value = stack.Pop(); templist[stack.Pop()] = value; }
-                //    stack.Pop();
-                //    stack.Push(templist);
-                //},
+                ["<<"] = (Action)(() => { stack.Push(mark); }),
+                [">>"] = (Action)(() =>
+                {
+                    Dictionary<string, dynamic> templist = new Dictionary<string, dynamic>();
+                    while (stack.Peek() != mark) { dynamic value = stack.Pop(); templist[stack.Pop()] = value; }
+                    stack.Pop();
+                    stack.Push(templist);
+                }),
                 //["abs"] = () => { dynamic temp = stack.Pop(); stack.Push(Math.Abs(temp)); },
                 ["add"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push(temp + stack.Pop()); }),
                 //["aload"] = () => { dynamic temp = stack.Pop(); foreach (var el in temp) stack.Push(el); stack.Push(temp); },
@@ -237,21 +239,17 @@ namespace ConsoleApplication1
                 {
                     dynamic proc = stack.Pop();
                     dynamic target = stack.Pop();
-                    if (target is Dictionary<string, dynamic>)
-                    {
-                        foreach (dynamic item in target)
-                        {
-                            stack.Push(item.Key);
-                            stack.Push(item.Value);
-                            execstack.Push(new PSObject(proc));
-                        }
-                    }
-                    else throw new Exception();
+                    PSObject temp = new PSObject(proc);
+                    temp.LoopArgs = new object[] { target };
+                    //temp.Loop = true;
+                    //temp.LoopController = new PSLoopController(start, step, end);
+                    execstack.Push(temp);
                 }),
                 //["ge"] = () => { stack.Push(stack.Pop() <= stack.Pop()); },
                 ["get"] = (Action)(() =>
                 {
                     dynamic temp = stack.Pop();
+                    if (temp is float) temp = (int)temp;
                     dynamic ps_source = stack.Pop();
                     stack.Push(ps_source[temp]);
                 }),
@@ -267,7 +265,7 @@ namespace ConsoleApplication1
                 //["grestore"] = () => { throw new NotImplementedException(); },
                 //["gsave"] = () => { throw new NotImplementedException(); },
                 //["gt"] = () => { stack.Push(stack.Pop() < stack.Pop()); },
-                //["idiv"] = () => { dynamic temp = stack.Pop(); stack.Push((int)(stack.Pop() / temp)); },
+                ["idiv"] = (Action)(() => { dynamic temp = stack.Pop(); stack.Push((int)(stack.Pop() / temp)); }),
                 ["if"] = (Action)(() =>
                 {
                     dynamic proc = stack.Pop();
@@ -318,12 +316,30 @@ namespace ConsoleApplication1
                     dynamic index = stack.Pop();
                     if (index is string && index.StartsWith("/")) index = index.Substring(1);
                     dynamic target = stack.Pop();
-                    var d = target as Dictionary<string, dynamic>;
-                    if (d == null) throw new Exception();
-                    d[index] = value;
+                    if (index is float) index = (int)index;
+                    target[index] = value;
+                    ;//var d = target as Dictionary<string, dynamic>;
+                    ;// if (d == null) throw new Exception();
+                    ;// d[index] = value;
                 }),
-                //["putinterval"] = () => { dynamic value = stack.Pop(); dynamic index = stack.Pop(); throw new Exception(); },
-                //["repeat"] = () => { throw new NotImplementedException(); },
+                ["putinterval"] = (Action)(() => { 
+                    dynamic value = stack.Pop(); 
+                    dynamic index = stack.Pop();
+                    dynamic target = stack.Pop();
+                    string str_target = (string)target;
+                    if (value.StartsWith("(")) value = value.Substring(1, value.Length - 2);
+                    for (int i = 0; i < value.Length; i++)
+                    {
+                        str_target.SetChar((int)index + i, (char)value[i]);
+                    }
+                }),
+                ["repeat"] = (Action)(() => {
+                    dynamic proc = stack.Pop();
+                    dynamic count = stack.Pop();
+                    var temp = new PSObject(proc);
+                    temp.LoopArgs = new object[] { count };
+                    execstack.Push(temp); 
+                }),
                 //["rlineto"] = () => { throw new NotImplementedException(); },
                 //["rmoveto"] = () => { throw new NotImplementedException(); },
                 //["roll"] = () => {
@@ -515,10 +531,19 @@ namespace ConsoleApplication1
                         if (_loop_args[0] is Dictionary<string, object>)
                         {
                             iterator = ((Dictionary<string, object>)_loop_args[0]).GetEnumerator();
-                            iterator.MoveNext();
                             _objects = Enumerable.Repeat(new object(), 2).Concat(_objects).ToArray();
                         }
+                        else if (_loop_args[0] is string)
+                        {
+                            iterator = ((string)_loop_args[0]).GetEnumerator();
+                            _objects = Enumerable.Repeat((object)0, 1).Concat(_objects).ToArray();
+                        }
                         else if (_loop_args[0] is bool) ;
+                        else if (_loop_args[0] is int)
+                        {
+                            ;
+
+                        }
                         else throw new Exception();
                     }
                     else if (_loop_args.Length == 3)
@@ -586,12 +611,24 @@ namespace ConsoleApplication1
                         }
                         else if (_loop_args[0] is Dictionary<string, object>) //forall - dictionary
                         {
-                            if (iterator.Current == null) return null;
-                            var p = (KeyValuePair<string, object>)iterator.Current;
-                            _objects[0] = p.Key;
-                            _objects[1] = p.Value;
-                            iterator.MoveNext();
-                            return _objects[_current++];
+                            if (iterator.MoveNext())
+                            {
+                                var p = (KeyValuePair<string, object>)iterator.Current;
+                                _objects[0] = "/" + p.Key;
+                                _objects[1] = p.Value;
+                                return _objects[_current++];
+                            }
+                            else return null;
+                        }
+                        else if (_loop_args[0] is string) //forall - string
+                        {
+                            if (iterator.MoveNext())
+                            {
+                                var p = (char)iterator.Current;
+                                _objects[0] = (int)p;
+                                return _objects[_current++];
+                            }
+                            else return null;
                         }
                         else throw new Exception();
                     }
