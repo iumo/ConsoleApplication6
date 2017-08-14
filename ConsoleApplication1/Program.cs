@@ -21,8 +21,13 @@ namespace ConsoleApplication1
 
         static void Main(string[] args)
         {
-            //string filepath = @"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps";
-            string filepath = @"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps";
+            string filepath = @"G:\Desktop\To Sort Out\Mine\postscript\postscriptbarcode-monolithic-2014-11-12\barcode_with_sample.ps";
+            //string filepath = @"C:\Users\Iura\Downloads\postscriptbarcode-monolithic-2017-07-10\barcode_with_sample.ps";
+
+            var fileBytes = System.IO.File.ReadAllBytes(filepath);
+            var psString = Encoding.ASCII.GetString(fileBytes);
+            PSObject._get_token_from_string(psString);
+
             initialize(new FileInfo(filepath));
             interpreter();
         }
@@ -637,39 +642,64 @@ namespace ConsoleApplication1
 
             private void _get_from_string(string source)
             {
-                var regex = new System.Text.RegularExpressions.Regex(
+                var regex = new Regex(
                     @"^
-                    (
-                    [^()%\[\]{}<>/\t\r\n\f \x00]+
-                    |
+                    (?:
                     [\t\r\n\f \x00]+
-                    |
-                    //?[^()%\[\]{}<>/\t\r\n\f \x00]*
                     |
                     %[^\n]*\n
                     |
+                    (
+                    /{0,2}[^()%\[\]{}<>/\t\r\n\f \x00]+
+                    |
                     \((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3}))|\((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3})))*\))*\)
+                    |
+                    <[0-9A-Fa-f]+>
                     |
                     <<
                     |
                     >>
                     |
-                    <[0-9A-Fa-f]+>
-                    |
                     [\[\]{}]
+                    )
                     )+
                     $",
-                    System.Text.RegularExpressions.RegexOptions.IgnorePatternWhitespace);
+                    RegexOptions.IgnorePatternWhitespace);
                 var matches = regex.Matches(source);
                 var captures = matches[0].Groups[1].Captures;
-                var tokens = captures.OfType<System.Text.RegularExpressions.Capture>()
+                var tokens = captures.OfType<Capture>()
                     .Select(capture => capture.Value)
                     .Where(str => !str.StartsWith("%")) //---Remove comments
-                    .Where(str => !System.Text.RegularExpressions.Regex.IsMatch(str, (@"^[\t\r\n\f \x00]+$")))
-                    .ToArray(); //---Remove white spaces
+                    .Where(str => !Regex.IsMatch(str, (@"^[\t\r\n\f \x00]+$"))) //---Remove white spaces
+                    .ToArray(); 
                 _tokens = tokens;
             }
-            
+
+            public static void _get_token_from_string(string source)
+            {
+                var regex = new Regex(
+                    @"
+                    (?<!^)(?=[{}])
+                    |
+                    (?<=^[{}])
+                    |
+                    (?:[\t\r\n\f \x00]+
+                    |
+                    %[^\n]*\n+
+                    )+
+                    ",
+                    RegexOptions.IgnorePatternWhitespace);
+                var matches = regex.Split(source, 2);
+                while (true) matches = regex.Split(matches[1], 2);
+                //var captures = matches[0].Groups[1].Captures;
+                //var tokens = captures.OfType<Capture>()
+                //    .Select(capture => capture.Value)
+                //    .Where(str => !str.StartsWith("%")) //---Remove comments
+                //    .Where(str => !Regex.IsMatch(str, (@"^[\t\r\n\f \x00]+$"))) //---Remove white spaces
+                //    .ToArray();
+                //_tokens = tokens;
+            }
+
             public int Position { get { return _current - 1; } }
 
             public bool Loop { get { return _loop_args != null; } }
@@ -822,9 +852,7 @@ namespace ConsoleApplication1
         }
         
     }
-
-
-        
+       
     internal static class PSTypeConverter
     {
         public static object Evaluate(string source)
