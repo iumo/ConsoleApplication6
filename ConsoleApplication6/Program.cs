@@ -85,19 +85,19 @@ namespace ConsoleApplication6
                 ["begin"] = () => { dictstack.Push(stack.Pop()); },
                 ["bind"] = () => {
                     return;
-                    dynamic proc = stack.Pop();
-                    for (var i = 0; i < proc.Count; i++)
-                    {
-                        if (proc[i] is string && !proc[i].StartsWith("/"))
-                        {
-                            if (systemdict.ContainsKey(proc[i]))
-                            {
-                                proc[i] = systemdict[proc[i]];
-                            }
+                    //dynamic proc = stack.Pop();
+                    //for (var i = 0; i < proc.Count; i++)
+                    //{
+                    //    if (proc[i] is string && !proc[i].StartsWith("/"))
+                    //    {
+                    //        if (systemdict.ContainsKey(proc[i]))
+                    //        {
+                    //            proc[i] = systemdict[proc[i]];
+                    //        }
 
-                        }
-                    }
-                    stack.Push(proc);
+                    //    }
+                    //}
+                    //stack.Push(proc);
                 },
                 ["bitshift"] = () => { dynamic temp = stack.Pop(); stack.Push( temp >=0 ? stack.Pop() << temp : stack.Pop() >> temp); },
                 ["ceiling"] = () => { stack.Push(Math.Ceiling((float)stack.Pop())); },
@@ -347,7 +347,7 @@ namespace ConsoleApplication6
                 if (procedure.Count > 0) procedure.Push(currentobject);
                 else
                 {
-                    if (item == "findresource" || item == "defineresource") ; //System.Diagnostics.Debugger.Break();
+                    if (item == "findresource" || item == "defineresource") { } //System.Diagnostics.Debugger.Break();
                     interpreter(currentobject, true);
                 }
             }
@@ -367,7 +367,7 @@ namespace ConsoleApplication6
 
         static void interpreter (dynamic currentobject, bool deferred = false) 
         {
-            if (currentobject is string && currentobject == "options") ; //System.Diagnostics.Debugger.Break();
+            if (currentobject is string && currentobject == "options") { } //System.Diagnostics.Debugger.Break();
             //if (currentobject is string && (currentobject == "defineresource" || currentobject == "findresource")) System.Diagnostics.Debugger.Break();
             if (currentobject is int || currentobject is float || currentobject is StringBuilderSegment || (currentobject.GetType() == typeof(object) && currentobject == mark))
             {
