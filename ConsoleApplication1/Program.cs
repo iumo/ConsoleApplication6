@@ -619,7 +619,30 @@ namespace ConsoleApplication1
             private object[] _objects;
             private object[] _loop_args = null;
             private IEnumerator iterator = null;
-            
+            private static Regex test_regex = new Regex(
+                    @"^
+                    (?:
+                    [\t\r\n\f \x00]+
+                    |
+                    %[^\n]*\n
+                    |
+                    (
+                    /{0,2}[^()%\[\]{}<>/\t\r\n\f \x00]+
+                    |
+                    \((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3}))|\((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3})))*\))*\)
+                    |
+                    <[0-9A-Fa-f]+>
+                    |
+                    <<
+                    |
+                    >>
+                    |
+                    [\[\]{}]
+                    )
+                    )+
+                    $",
+                    RegexOptions.IgnorePatternWhitespace);
+
             public PSObject(FileSystemInfo file)
             {
                 var fileBytes = System.IO.File.ReadAllBytes(file.FullName);
@@ -690,7 +713,13 @@ namespace ConsoleApplication1
                     ",
                     RegexOptions.IgnorePatternWhitespace);
                 var matches = regex.Split(source, 2);
-                while (true) matches = regex.Split(matches[1], 2);
+                do
+                {
+                    matches = regex.Split(matches[1], 2);
+                    while (matches[0] == string.Empty) matches = regex.Split(matches[1], 2);
+                } while (test_regex.IsMatch(matches[0]));
+                
+                ;
                 //var captures = matches[0].Groups[1].Captures;
                 //var tokens = captures.OfType<Capture>()
                 //    .Select(capture => capture.Value)
