@@ -700,23 +700,103 @@ namespace ConsoleApplication1
 
             public static void _get_token_from_string(string source)
             {
-                var regex = new Regex(
+                //var regex = new Regex(
+                //    @"
+                //    (?<!^)(?=[{}])
+                //    |
+                //    (?<=^[{}])
+                //    |
+                //    (?:[\t\r\n\f \x00]+
+                //    |
+                //    %[^\n]*\n+
+                //    )+
+                //    ",
+                //    RegexOptions.IgnorePatternWhitespace);
+                var regex1 = new Regex(
                     @"
-                    (?<!^)(?=[{}])
+                    (?<=^
+                    (?:/{0,2}[^()%\[\]{}<>/\t\r\n\f \x00]+
                     |
-                    (?<=^[{}])
+                    \((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3}))|\((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3})))*\))*\)
                     |
+                    <[0-9A-Fa-f]+>
+                    |
+                    <<
+                    |
+                    >>
+                    |
+                    [\[\]{}]
+                    ))
+                    (?:
                     (?:[\t\r\n\f \x00]+
                     |
-                    %[^\n]*\n+
+                    %[^\n]*\n
                     )+
+                    |
+                    (?<!^)(?=[{}\[\]</(])
+                    |
+                    (?<=[{}\[\]>)])
+                    )
+                    (?=
+                    /{0,2}[^()%\[\]{}<>/\t\r\n\f \x00]+
+                    |
+                    \((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3}))|\((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3})))*\))*\)
+                    |
+                    <[0-9A-Fa-f]+>
+                    |
+                    <<
+                    |
+                    >>
+                    |
+                    [\[\]{}]
+                    )
                     ",
                     RegexOptions.IgnorePatternWhitespace);
-                var matches = regex.Split(source, 2);
+                var regex2 = new Regex(
+                    @"
+                    (?<=
+                    (?:/{0,2}[^()%\[\]{}<>/\t\r\n\f \x00]+
+                    |
+                    \((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3}))|\((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3})))*\))*\)
+                    |
+                    <[0-9A-Fa-f]+>
+                    |
+                    <<
+                    |
+                    >>
+                    |
+                    [\[\]{}]
+                    ))
+                    (?:
+                    (?:[\t\r\n\f \x00]+
+                    |
+                    %[^\n]*\n
+                    )+
+                    |
+                    (?<!^)(?=[{}\[\]</(])
+                    |
+                    (?<=[{}\[\]>)])
+                    )
+                    (?=
+                    /{0,2}[^()%\[\]{}<>/\t\r\n\f \x00]+
+                    |
+                    \((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3}))|\((?:(?:[^()\\]*)|(?:\\(?:[nrtbf\\()]|[0-7]{1,3})))*\))*\)
+                    |
+                    <[0-9A-Fa-f]+>
+                    |
+                    <<
+                    |
+                    >>
+                    |
+                    [\[\]{}]
+                    )
+                    ",
+                    RegexOptions.IgnorePatternWhitespace);
+                var matches = regex2.Split(source, 2);
                 do
                 {
-                    matches = regex.Split(matches[1], 2);
-                    while (matches[0] == string.Empty) matches = regex.Split(matches[1], 2);
+                    Console.WriteLine(matches[1].Length);
+                    matches = regex1.Split(matches[1], 2);
                 } while (test_regex.IsMatch(matches[0]));
                 
                 ;
